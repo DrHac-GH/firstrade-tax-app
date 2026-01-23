@@ -914,7 +914,7 @@ export default function App() {
               <h2 className="text-3xl font-extrabold text-slate-900">
                 米国株の確定申告を<br />もっと簡単に。
               </h2>
-              <p className="text-slate-500">FirstradeのCSVをドロップしてください。<br />「Gain/Loss」と「History (配当)」の両方に対応しています。</p>
+              <p className="text-slate-500">FirstradeのCSVをドロップしてください。<br />「FT_GainLoss_xxxx.csv (譲渡損益)」と「FT_CSV_xxxx.csv (配当・利子)」の両方に対応しています。</p>
             </div>
             <div
               onDragOver={onDragOver}
@@ -933,7 +933,7 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-slate-900 mb-1">{loading ? "解析中..." : (isDragging ? "ここにドロップ！" : "CSVをドロップ")}</h3>
-                  <p className="text-slate-500 text-sm">Gain/Loss または Account History (配当/利子)</p>
+                  <p className="text-slate-500 text-sm">FT_GainLoss_xxxx.csv と FT_CSV_xxxx.csv</p>
                 </div>
               </div>
             </div>
@@ -1013,7 +1013,6 @@ export default function App() {
               <RefreshCw className="w-8 h-8" />
             </div>
             <h3 className="text-lg font-bold text-blue-900">データ読み込み完了！</h3>
-            <p className="text-blue-700">為替レートを取得して、日本円への換算を開始してください。</p>
             <button
               onClick={fetchExchangeRates}
               disabled={fetchingRates}
