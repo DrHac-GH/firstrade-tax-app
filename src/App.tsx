@@ -430,6 +430,21 @@ export default function App() {
   const [expandedTicker, setExpandedTicker] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Auth State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [authError, setAuthError] = useState(false);
+
+  // Login Handler
+  const handleLogin = () => {
+    if (passwordInput === 'firstrade2025') {
+      setIsAuthenticated(true);
+      setAuthError(false);
+    } else {
+      setAuthError(true);
+    }
+  };
+
   // UseRef for Printing
   /* UseRef for Printing */
   const contentRef = useRef<HTMLDivElement>(null);
@@ -1157,6 +1172,40 @@ export default function App() {
         )}
 
       </div>
+
+      {/* --- PASSWORD OVERLAY --- */}
+      {!isAuthenticated && (
+        <div className="fixed inset-0 z-50 bg-slate-100 flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center animate-in fade-in zoom-in duration-300">
+            <h1 className="text-2xl font-bold text-slate-800 mb-2">Firstrade 確定申告アシスタント</h1>
+            <p className="text-slate-500 mb-8 text-sm">ご利用にはパスワードが必要です</p>
+
+            <div className="space-y-4">
+              <input
+                type="password"
+                value={passwordInput}
+                onChange={(e) => setPasswordInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="パスワードを入力"
+                autoFocus
+              />
+              {authError && <p className="text-red-500 text-sm font-bold">パスワードが間違っています</p>}
+
+              <button
+                onClick={handleLogin}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors"
+              >
+                認証して開始
+              </button>
+            </div>
+            <p className="mt-8 text-center text-xs text-slate-400">
+              © Antigravity / Firstrade Tax Assistant
+            </p>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
