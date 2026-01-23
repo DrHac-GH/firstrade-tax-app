@@ -67,6 +67,16 @@ interface DividendTransaction {
   description: string;
 }
 
+interface InterestTransaction {
+  id: number;
+  symbol: string;
+  date: Date;
+  amountNetUsd: number;
+  rate: number;
+  amountNetJpy: number;
+  description: string;
+}
+
 interface RatesMap {
   [date: string]: number; // "YYYY-MM-DD" -> Rate
 }
@@ -157,12 +167,14 @@ const ReportTemplate = ({
   totals,
   grouped,
   dividends,
+  interests,
   ref
 }: {
   year: number,
   totals: any,
   grouped: [string, { summary: any }][],
   dividends: DividendTransaction[],
+  interests: InterestTransaction[],
   ref: React.RefObject<HTMLDivElement | null>
 }) => {
   const dividendTotal = dividends.reduce((acc, d) => ({
@@ -171,6 +183,11 @@ const ReportTemplate = ({
     net: acc.net + d.amountNetJpy,
     grossUsd: acc.grossUsd + d.amountGrossUsd
   }), { gross: 0, tax: 0, net: 0, grossUsd: 0 });
+
+  const interestTotal = interests.reduce((acc, i) => ({
+    net: acc.net + i.amountNetJpy,
+    netUsd: acc.netUsd + i.amountNetUsd
+  }), { net: 0, netUsd: 0 });
 
   return (
     <div ref={ref} className="p-12 bg-white text-slate-900 font-serif print-content">
@@ -330,6 +347,56 @@ const ReportTemplate = ({
         </div>
       )}
 
+      {/* --- Section 3: Interest --- */}
+      {interests.length > 0 && (
+        <div className="mt-12">
+          <h2 className="text-lg font-bold mb-4 border-l-4 border-slate-900 pl-3 flex items-center gap-2">
+            3. 利子所得 <span className="text-sm font-normal text-slate-500">(一般利子等)</span>
+          </h2>
+
+          <table className="w-full border-collapse border border-slate-400 mb-6">
+            <thead className="bg-slate-100">
+              <tr>
+                <th className="border border-slate-400 p-3 text-left">区分</th>
+                <th className="border border-slate-400 p-3 text-right">金額 (円)</th>
+                <th className="border border-slate-400 p-3 text-right text-xs text-slate-500 font-normal">参考(USD)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="bg-slate-50 font-bold">
+                <td className="border border-slate-400 p-3">受取利子総額</td>
+                <td className="border border-slate-400 p-3 text-right text-xl">{Math.floor(interestTotal.net).toLocaleString()}</td>
+                <td className="border border-slate-400 p-3 text-right text-slate-500">$ {interestTotal.netUsd.toFixed(2)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <h3 className="text-md font-bold mb-2 text-slate-700">受取利子明細</h3>
+          <table className="w-full border-collapse border border-slate-300 text-xs">
+            <thead className="bg-slate-100 text-slate-700">
+              <tr>
+                <th className="border border-slate-300 p-1 text-left">入金日</th>
+                <th className="border border-slate-300 p-1 text-left">項目</th>
+                <th className="border border-slate-300 p-1 text-right">レート</th>
+                <th className="border border-slate-300 p-1 text-right">受取額(USD)</th>
+                <th className="border border-slate-300 p-1 text-right bg-slate-50">受取額(円)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {interests.map(i => (
+                <tr key={i.id}>
+                  <td className="border border-slate-300 p-1">{format(i.date, 'MM/dd')}</td>
+                  <td className="border border-slate-300 p-1 font-bold">{i.description.substring(0, 30)}...</td>
+                  <td className="border border-slate-300 p-1 text-right text-slate-500">{i.rate.toFixed(2)}</td>
+                  <td className="border border-slate-300 p-1 text-right">{i.amountNetUsd.toFixed(2)}</td>
+                  <td className="border border-slate-300 p-1 text-right font-medium bg-slate-50">{Math.floor(i.amountNetJpy).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
       {/* Footer */}
       <div className="mt-12 pt-8 border-t border-slate-300 text-xs text-slate-500 text-center leading-relaxed">
         <p>※本計算書は、Firstradeから発行されたCSVに基づき、取引日の為替レート(欧州中央銀行参照TTM)を用いて日本円換算したものです。</p>
@@ -340,15 +407,17 @@ const ReportTemplate = ({
 };
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'capital' | 'dividend'>('capital');
+  const [activeTab, setActiveTab] = useState<'capital' | 'dividend' | 'interest'>('capital');
 
   // Data States
   const [gainLossData, setGainLossData] = useState<JpyTransaction[]>([]);
   const [dividendData, setDividendData] = useState<DividendTransaction[]>([]);
+  const [interestData, setInterestData] = useState<InterestTransaction[]>([]);
 
   // Raw CSV States
   const [gainLossRaw, setGainLossRaw] = useState<GainLossRow[] | null>(null);
   const [dividendRaw, setDividendRaw] = useState<HistoryRow[] | null>(null);
+  const [interestRaw, setInterestRaw] = useState<HistoryRow[] | null>(null);
 
   // Exchange Rates
   const [rates, setRates] = useState<RatesMap>({});
@@ -378,6 +447,10 @@ export default function App() {
   const filteredDividends = useMemo(() => {
     return dividendData.filter(t => t.date.getFullYear() === selectedYear);
   }, [dividendData, selectedYear]);
+
+  const filteredInterests = useMemo(() => {
+    return interestData.filter(t => t.date.getFullYear() === selectedYear);
+  }, [interestData, selectedYear]);
 
   // Aggregation for Capital Gains
   const groupedGainLoss = useMemo(() => {
@@ -424,9 +497,10 @@ export default function App() {
     const years = new Set<number>();
     gainLossData.forEach(t => years.add(t.dateSold.getFullYear()));
     dividendData.forEach(t => years.add(t.date.getFullYear()));
+    interestData.forEach(t => years.add(t.date.getFullYear()));
     if (years.size === 0) return [new Date().getFullYear()];
     return Array.from(years).sort((a, b) => b - a);
-  }, [gainLossData, dividendData]);
+  }, [gainLossData, dividendData, interestData]);
 
 
   // --- File Processing ---
@@ -520,7 +594,15 @@ export default function App() {
             else {
               setDividendRaw(rows);
               setActiveTab('dividend');
-              if (Object.keys(rates).length > 0) calculateDividends(rows, rates);
+              const interestRows = (results.data as HistoryRow[]).filter(r => r.Action === 'Interest');
+              if (interestRows.length > 0) {
+                setInterestRaw(interestRows);
+              }
+
+              if (Object.keys(rates).length > 0) {
+                calculateDividends(rows, rates);
+                if (interestRows.length > 0) calculateInterests(interestRows, rates);
+              }
             }
           } else {
             // Fallback Logic if headers unclear
@@ -529,12 +611,20 @@ export default function App() {
               setGainLossRaw((results.data as GainLossRow[]).filter(r => r.Symbol));
               setActiveTab('capital');
             } else if (firstRow && firstRow['Action']) {
-              const rows = (results.data as HistoryRow[]).filter(r => r.Action === 'Dividend');
-              if (rows.length === 0) {
-                setError("CSVは読み込めましたが、配当データ(Action=Dividend)が含まれていません");
+              const divRows = (results.data as HistoryRow[]).filter(r => r.Action === 'Dividend');
+              const intRows = (results.data as HistoryRow[]).filter(r => r.Action === 'Interest');
+
+              if (divRows.length === 0 && intRows.length === 0) {
+                setError("CSVは読み込めましたが、配当(Dividend)も利子(Interest)も含まれていません");
               } else {
-                setDividendRaw(rows);
-                setActiveTab('dividend');
+                if (divRows.length > 0) {
+                  setDividendRaw(divRows);
+                  setActiveTab('dividend');
+                }
+                if (intRows.length > 0) {
+                  setInterestRaw(intRows);
+                  if (divRows.length === 0) setActiveTab('interest');
+                }
               }
             } else {
               setError("不明なCSV形式です。Firstradeの Gain/Loss または History ファイルを使用してください。");
@@ -570,6 +660,12 @@ export default function App() {
         if (d) dates.push(d);
       });
 
+      // Collect dates from Interests
+      interestRaw?.forEach(row => {
+        const d = parseDateAny(row.TradeDate);
+        if (d) dates.push(d);
+      });
+
       if (dates.length === 0) throw new Error("日付データが見つかりません");
 
       const minDate = min(dates);
@@ -591,6 +687,7 @@ export default function App() {
       // Calculate Both
       if (gainLossRaw) calculateGainLoss(gainLossRaw, ratesMap);
       if (dividendRaw) calculateDividends(dividendRaw, ratesMap);
+      if (interestRaw) calculateInterests(interestRaw, ratesMap);
 
       // Auto Set Year
       const years = new Set<number>();
@@ -670,6 +767,27 @@ export default function App() {
     setDividendData(calculated);
   };
 
+  const calculateInterests = (rows: HistoryRow[], currentRates: RatesMap) => {
+    const calculated = rows.map((row, idx) => {
+      const date = parseDateAny(row.TradeDate);
+      if (!date) return null;
+
+      const amountNetUsd = parseMoney(row.Amount);
+      const rateData = getRateForDate(date, currentRates);
+
+      return {
+        id: idx,
+        symbol: row.Symbol,
+        date,
+        amountNetUsd,
+        rate: rateData.rate,
+        amountNetJpy: Math.floor(amountNetUsd * rateData.rate),
+        description: row.Description
+      } as InterestTransaction;
+    }).filter(Boolean) as InterestTransaction[];
+    setInterestData(calculated);
+  };
+
   const formatCurrency = (val: number) => `¥ ${Math.floor(val).toLocaleString()}`;
   const formatUsd = (val: number) => `$ ${val.toFixed(2)}`;
 
@@ -698,7 +816,7 @@ export default function App() {
       link.href = URL.createObjectURL(blob);
       link.download = `GainLoss_${selectedYear}_Calculated.csv`;
       link.click();
-    } else {
+    } else if (activeTab === 'dividend') {
       if (filteredDividends.length === 0) return;
       const data = filteredDividends.map(d => ({
         Symbol: d.symbol,
@@ -718,6 +836,22 @@ export default function App() {
       link.href = URL.createObjectURL(blob);
       link.download = `Dividends_${selectedYear}_Calculated.csv`;
       link.click();
+    } else {
+      if (filteredInterests.length === 0) return;
+      const data = filteredInterests.map(i => ({
+        Symbol: i.symbol,
+        Date: format(i.date, 'yyyy-MM-dd'),
+        Rate: i.rate,
+        'Amount (USD)': i.amountNetUsd,
+        'Amount (JPY)': i.amountNetJpy,
+        'Description': i.description
+      }));
+      const csv = Papa.unparse(data);
+      const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `Interest_${selectedYear}_Calculated.csv`;
+      link.click();
     }
   };
 
@@ -732,6 +866,7 @@ export default function App() {
           totals={totalsGainLoss}
           grouped={groupedGainLoss}
           dividends={filteredDividends}
+          interests={filteredInterests}
         />
       </div>
 
@@ -798,7 +933,7 @@ export default function App() {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-slate-900 mb-1">{loading ? "解析中..." : (isDragging ? "ここにドロップ！" : "CSVをドロップ")}</h3>
-                  <p className="text-slate-500 text-sm">Gain/Loss または Account History</p>
+                  <p className="text-slate-500 text-sm">Gain/Loss または Account History (配当/利子)</p>
                 </div>
               </div>
             </div>
@@ -811,14 +946,16 @@ export default function App() {
             <div className="text-sm text-slate-500">
               <span className="font-bold text-slate-700 mr-2">読み込み済み:</span>
               {gainLossRaw ? "譲渡損益 (未計算) ✅" : ""}
-              {gainLossRaw && dividendRaw ? " / " : ""}
-              {dividendRaw ? "配当データ (未計算) ✅" : ""}
+              {(gainLossRaw && (dividendRaw || interestRaw)) ? " / " : ""}
+              {dividendRaw ? "配当 (未計算) ✅" : ""}
+              {(dividendRaw && interestRaw) ? " / " : ""}
+              {interestRaw ? "利子 (未計算) ✅" : ""}
             </div>
             <div className="flex gap-2">
-              {!dividendRaw && (
+              {(!dividendRaw || !interestRaw) && (
                 <div className="relative overflow-hidden group">
                   <input type="file" accept=".csv" className="absolute inset-0 opacity-0 cursor-pointer z-10" onChange={handleFileUpload} />
-                  <button className="px-4 py-2 bg-slate-100 group-hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium">配当CSVを追加</button>
+                  <button className="px-4 py-2 bg-slate-100 group-hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-medium">History CSVを追加</button>
                 </div>
               )}
               {!gainLossRaw && (
@@ -840,7 +977,7 @@ export default function App() {
         )}
 
         {/* Tabs */}
-        {(gainLossRaw || dividendRaw) && (
+        {(gainLossRaw || dividendRaw || interestRaw) && (
           <div className="flex gap-2 border-b border-slate-200">
             {gainLossRaw && (
               <button
@@ -856,6 +993,14 @@ export default function App() {
                 className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex items-center gap-2", activeTab === 'dividend' ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700")}
               >
                 <Landmark className="w-4 h-4" /> 配当所得 (Dividends)
+              </button>
+            )}
+            {interestRaw && (
+              <button
+                onClick={() => setActiveTab('interest')}
+                className={cn("px-6 py-3 font-bold text-sm border-b-2 transition-colors flex items-center gap-2", activeTab === 'interest' ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700")}
+              >
+                <div className="bg-green-100 text-green-700 p-1 rounded-sm"><DollarSign className="w-3 h-3" /></div> 利子 (Interest)
               </button>
             )}
           </div>
@@ -961,6 +1106,42 @@ export default function App() {
                       <td className="p-3 text-right font-mono text-red-500">-{d.taxUsd.toFixed(2)}</td>
                       <td className="p-3 text-right font-bold bg-blue-50/30">{d.amountGrossJpy.toLocaleString()}</td>
                       <td className="p-3 text-right text-red-600 bg-blue-50/30">-{d.taxJpy.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* --- INTEREST VIEW --- */}
+        {activeTab === 'interest' && interestData.length > 0 && (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <SummaryCard title="利子受取総額 (円)" amount={formatCurrency(filteredInterests.reduce((sum, i) => sum + i.amountNetJpy, 0))} type='positive' icon={DollarSign} />
+              <SummaryCard title="受取総額 (USD)" amount={formatUsd(filteredInterests.reduce((sum, i) => sum + i.amountNetUsd, 0))} />
+              <SummaryCard title="受取回数" amount={`${filteredInterests.length} 回`} type='neutral' />
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-medium">
+                  <tr>
+                    <th className="p-3 text-left">入金日</th>
+                    <th className="p-3 text-left">内容</th>
+                    <th className="p-3 text-right">受取額(USD)</th>
+                    <th className="p-3 text-right">レート</th>
+                    <th className="p-3 text-right bg-green-50/50">受取額(円)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredInterests.map(i => (
+                    <tr key={i.id} className="hover:bg-slate-50">
+                      <td className="p-3 font-mono text-slate-600">{format(i.date, 'yyyy/MM/dd')}</td>
+                      <td className="p-3 font-bold text-slate-700">{i.description.substring(0, 50)}{i.description.length > 50 ? '...' : ''}</td>
+                      <td className="p-3 text-right font-mono">{i.amountNetUsd.toFixed(2)}</td>
+                      <td className="p-3 text-right font-mono text-slate-500">{i.rate.toFixed(2)}</td>
+                      <td className="p-3 text-right font-bold bg-green-50/30 text-green-700">{i.amountNetJpy.toLocaleString()}</td>
                     </tr>
                   ))}
                 </tbody>
