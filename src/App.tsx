@@ -937,6 +937,13 @@ export default function App() {
                 </div>
               </div>
             </div>
+            {/* Disclaimer */}
+            <div className="max-w-xl mx-auto mt-8 text-center pt-8 border-t border-slate-100">
+              <p className="text-xs text-slate-400 leading-relaxed">
+                ※本ツールは税務署等の公式ツールではありません。<br />
+                計算結果は参考値としてご利用いただき、最終的な申告内容はご自身の責任でご確認ください。
+              </p>
+            </div>
           </div>
         )}
 
