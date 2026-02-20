@@ -437,7 +437,9 @@ export default function App() {
 
   // Login Handler
   const handleLogin = () => {
-    if (passwordInput === 'firstrade2025') {
+    // 環境変数 VITE_APP_PASSWORD を使用し、未設定の場合は 'firstrade2025' をデフォルトとする
+    const appPassword = import.meta.env.VITE_APP_PASSWORD || 'firstrade2025';
+    if (passwordInput === appPassword) {
       setIsAuthenticated(true);
       setAuthError(false);
     } else {
